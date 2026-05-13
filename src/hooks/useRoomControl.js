@@ -83,25 +83,54 @@ export function useRoomControl({
 
   /* ---------- actions ---------- */
 
-  const kick = useCallback((targetId) => {
-    if (!isHost || !channelRef.current || !targetId) return
-    return channelRef.current.send({
-      type: 'broadcast',
-      event: 'kick',
-      payload: { target: targetId, from: user.id },
+  // Kick a user: first broadcast (instant UX) then call the RPC that
+  // deletes their participant row (semi-persistent so they can't just
+  // refresh and silently rejoin).
+  const kick = useCallback(async (targetId) => {
+    if (!isHost || !channelRef.current || !targetId) {
+      throw new Error('Not allowed')
+    }
+    // Fire the broadcast first so the kicked client redirects immediately.
+    try {
+      await channelRef.current.send({
+        type: 'broadcast',
+        event: 'kick',
+        payload: { target: targetId, from: user.id },
+      })
+    } catch (e) { console.warn('[room-control] kick broadcast failed', e) }
+    // Then delete their row via the RPC. Falls back gracefully if the
+    // RPC isn't deployed yet (older migration).
+    const { error } = await supabase.rpc('kick_user', {
+      p_room_id: roomId,
+      p_user_id: targetId,
     })
-  }, [isHost, user?.id])
+    if (error) {
+      console.warn('[room-control] kick_user RPC failed', error)
+      // Not fatal — the broadcast already redirected them.
+    }
+  }, [isHost, user?.id, roomId])
 
   const transferHost = useCallback(async (newHostId) => {
-    if (!isHost || !roomId || !newHostId || newHostId === user.id) return
-    // Persist on the rooms row so a refresh reflects the new host.
-    const { error } = await supabase
-      .from('rooms')
-      .update({ host_id: newHostId })
-      .eq('id', roomId)
+    if (!isHost || !roomId || !newHostId || newHostId === user.id) {
+      throw new Error('Not allowed')
+    }
+    // Prefer the SECURITY DEFINER RPC; if it's missing on this deployment
+    // fall back to a direct UPDATE (relies on the rooms_update_host policy).
+    let { error } = await supabase.rpc('transfer_host', {
+      p_room_id: roomId,
+      p_new_host_id: newHostId,
+    })
+    if (error && /transfer_host|function/i.test(error.message || '')) {
+      console.warn('[room-control] transfer_host RPC missing — falling back to UPDATE')
+      const r = await supabase
+        .from('rooms')
+        .update({ host_id: newHostId })
+        .eq('id', roomId)
+      error = r.error
+    }
     if (error) {
       console.warn('[room-control] transferHost failed', error)
-      throw error
+      throw new Error(error.message || 'Transfer failed')
     }
   }, [isHost, roomId, user?.id])
 

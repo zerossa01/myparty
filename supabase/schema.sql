@@ -169,3 +169,64 @@ end;
 $$;
 
 grant execute on function public.toggle_reaction(uuid, text) to authenticated, anon;
+
+-- =====================================================================
+-- Host moderation RPCs
+-- =====================================================================
+-- transfer_host(p_room_id, p_new_host_id):
+--   The current host hands the crown to another user. Runs as definer so
+--   it cannot be blocked by RLS edge cases. Verifies the caller is the
+--   current host before mutating.
+create or replace function public.transfer_host(p_room_id uuid, p_new_host_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid       text := auth.uid()::text;
+  cur_host  text;
+begin
+  if uid is null then raise exception 'not authenticated'; end if;
+  select host_id into cur_host from public.rooms where id = p_room_id for update;
+  if cur_host is null then raise exception 'room not found'; end if;
+  if cur_host <> uid then raise exception 'only the current host can transfer leadership'; end if;
+  if p_new_host_id is null or length(p_new_host_id) = 0 then
+    raise exception 'new host id required';
+  end if;
+  -- Make sure the target is actually a participant of this room.
+  if not exists (
+    select 1 from public.users where id::text = p_new_host_id and room_id = p_room_id
+  ) then
+    raise exception 'new host is not a participant of this room';
+  end if;
+  update public.rooms set host_id = p_new_host_id where id = p_room_id;
+end;
+$$;
+
+grant execute on function public.transfer_host(uuid, text) to authenticated, anon;
+
+-- kick_user(p_room_id, p_user_id):
+--   The current host kicks a participant. Deletes the target's users row
+--   (cascade-removes their messages), making the kick semi-persistent —
+--   they can rejoin only by re-onboarding.
+create or replace function public.kick_user(p_room_id uuid, p_user_id text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid       text := auth.uid()::text;
+  cur_host  text;
+begin
+  if uid is null then raise exception 'not authenticated'; end if;
+  select host_id into cur_host from public.rooms where id = p_room_id;
+  if cur_host is null then raise exception 'room not found'; end if;
+  if cur_host <> uid then raise exception 'only the host can kick'; end if;
+  if p_user_id = cur_host then raise exception 'cannot kick the host'; end if;
+  delete from public.users where id::text = p_user_id and room_id = p_room_id;
+end;
+$$;
+
+grant execute on function public.kick_user(uuid, text) to authenticated, anon;

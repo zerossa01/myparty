@@ -163,6 +163,19 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
   const [chatOpen, setChatOpen] = useState(false)
   const [unread, setUnread] = useState(0)
   const [kickedNotice, setKickedNotice] = useState(null)
+  const [toast, setToast] = useState(null) // {kind: 'ok'|'err', msg: string}
+
+  const showToast = useCallback((kind, msg) => {
+    setToast({ kind, msg })
+    setTimeout(() => setToast((t) => (t && t.msg === msg ? null : t)), 3000)
+  }, [])
+
+  const viewersById = useMemo(() => {
+    const m = new Map()
+    for (const v of viewers) m.set(v.id, v)
+    return m
+  }, [viewers])
+
   const isDesktop = useMediaQuery('(min-width: 1024px)') // tailwind lg
   const navigate = useNavigate()
 
@@ -231,6 +244,34 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
     onClearMedia,
   })
 
+  // Moderation action handlers — defined after `control`/`voice` exist so
+  // they can close over the latest action callbacks and surface a toast.
+  const handleTransferHost = useCallback(async (uid) => {
+    const name = viewersById.get(uid)?.displayName || 'that user'
+    try {
+      await control.transferHost(uid)
+      showToast('ok', `👑 ${name} is now the host`)
+    } catch (e) {
+      showToast('err', e?.message || 'Could not transfer host')
+    }
+  }, [control, viewersById, showToast])
+
+  const handleKick = useCallback(async (uid) => {
+    const name = viewersById.get(uid)?.displayName || 'that user'
+    try {
+      await control.kick(uid)
+      showToast('ok', `🚪 Kicked ${name}`)
+    } catch (e) {
+      showToast('err', e?.message || 'Could not kick user')
+    }
+  }, [control, viewersById, showToast])
+
+  const handleForceMute = useCallback((uid) => {
+    voice.forceMutePeer?.(uid)
+    const name = viewersById.get(uid)?.displayName || 'that user'
+    showToast('ok', `🔇 Asked ${name} to mute`)
+  }, [voice, viewersById, showToast])
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-zinc-950 via-zinc-900 to-black">
       {/* TOP BAR — slim, dark, theatrical. Single row, no wrap. */}
@@ -283,9 +324,9 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
             voicePeers={voice.peers}
             amInVoice={voice.joined}
             amMuted={voice.muted}
-            onTransferHost={(uid) => control.transferHost(uid)}
-            onKick={(uid) => control.kick(uid)}
-            onForceMute={(uid) => voice.forceMutePeer(uid)}
+            onTransferHost={handleTransferHost}
+            onKick={handleKick}
+            onForceMute={handleForceMute}
             compact
           />
           <div className="hidden xl:block">
@@ -307,8 +348,22 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
 
       {/* Kicked toast */}
       {kickedNotice && (
-        <div className="fixed inset-x-0 top-4 z-50 mx-auto w-fit rounded-xl border border-red-500/40 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-200 shadow-lg backdrop-blur">
+        <div className="fixed inset-x-0 top-4 z-[80] mx-auto w-fit rounded-xl border border-red-500/40 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-200 shadow-lg backdrop-blur">
           🚪 {kickedNotice}
+        </div>
+      )}
+
+      {/* Generic action toast (success / error) */}
+      {toast && (
+        <div
+          className={
+            'fixed inset-x-0 top-16 z-[80] mx-auto w-fit rounded-xl border px-4 py-2 text-sm font-semibold shadow-lg backdrop-blur ' +
+            (toast.kind === 'err'
+              ? 'border-red-500/40 bg-red-500/15 text-red-200'
+              : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200')
+          }
+        >
+          {toast.msg}
         </div>
       )}
 
