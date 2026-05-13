@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.js'
 import { supabase } from '../lib/supabase.js'
 import VideoPlayer from '../components/VideoPlayer.jsx'
 import ChatPanel from '../components/ChatPanel.jsx'
 import ViewersBar from '../components/ViewersBar.jsx'
+import VoiceBar from '../components/VoiceBar.jsx'
+import VoteSkipButton from '../components/VoteSkipButton.jsx'
 import PresenceToasts from '../components/PresenceToasts.jsx'
 import InviteButton from '../components/InviteButton.jsx'
 import ExpiryCountdown from '../components/ExpiryCountdown.jsx'
 import { usePresence } from '../hooks/usePresence.js'
 import { useMediaQuery } from '../hooks/useMediaQuery.js'
+import { useRoomControl } from '../hooks/useRoomControl.js'
+import { useVoiceChat } from '../hooks/useVoiceChat.js'
 
 export default function RoomPage() {
   const { roomId } = useParams()
@@ -41,22 +45,47 @@ export default function RoomPage() {
         return
       }
       setRoom(data)
-
-      // Look up host's display_name from the users table.
-      const { data: hostRow } = await supabase
-        .from('users')
-        .select('display_name')
-        .eq('id', data.host_id)
-        .eq('room_id', data.id)
-        .maybeSingle()
-      if (!cancelled) setHostName(hostRow?.display_name || 'Host')
       setLoading(false)
     }
     load()
+
+    // Live-update the room row so host transfers, video clears, etc. are
+    // reflected immediately for everyone.
+    const ch = supabase
+      .channel(`room-row-${roomId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
+        ({ new: row }) => { if (!cancelled && row) setRoom(row) }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
+        () => { if (!cancelled) navigate('/', { replace: true }) }
+      )
+      .subscribe()
+
     return () => {
       cancelled = true
+      try { supabase.removeChannel(ch) } catch { /* */ }
     }
   }, [roomId, navigate])
+
+  // Re-resolve host display_name whenever the host_id changes (host transfer)
+  useEffect(() => {
+    if (!room?.host_id) return
+    let cancelled = false
+    ;(async () => {
+      const { data: hostRow } = await supabase
+        .from('users')
+        .select('display_name')
+        .eq('id', room.host_id)
+        .eq('room_id', room.id)
+        .maybeSingle()
+      if (!cancelled) setHostName(hostRow?.display_name || 'Host')
+    })()
+    return () => { cancelled = true }
+  }, [room?.host_id, room?.id])
 
   if (authLoading || loading) {
     return (
@@ -132,8 +161,43 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
   )
   const { viewers, lastEvent } = usePresence(room.id, presenceUser)
   const [chatOpen, setChatOpen] = useState(false)
+  const [kickedNotice, setKickedNotice] = useState(null)
   const isDesktop = useMediaQuery('(min-width: 1024px)') // tailwind lg
   const navigate = useNavigate()
+
+  const presentIds = useMemo(() => viewers.map((v) => v.id), [viewers])
+
+  // ── Voice chat (WebRTC mesh) ────────────────────────────────────────────
+  const voice = useVoiceChat({ roomId: room.id, user, isHost })
+
+  // ── Host moderation (kick / transfer / vote-skip) ──────────────────────
+  const onKickedSelf = useCallback(() => {
+    setKickedNotice('You were removed from the room by the host.')
+    // Stop voice + leave after a short delay so the toast is visible.
+    try { voice.leaveVoice?.() } catch { /* */ }
+    setTimeout(() => navigate('/', { replace: true }), 2000)
+  }, [navigate, voice])
+
+  const onClearMedia = useCallback(async () => {
+    if (!isHost) return
+    // Persisting null video_url triggers the realtime UPDATE → all clients
+    // (including the host) re-render VideoPlayer with an empty URL.
+    const { error } = await supabase
+      .from('rooms')
+      .update({ video_url: '' })
+      .eq('id', room.id)
+    if (error) console.warn('[room] clear video failed', error)
+  }, [isHost, room.id])
+
+  const control = useRoomControl({
+    roomId: room.id,
+    user,
+    isHost,
+    presentIds,
+    mediaUrl: room.video_url || '',
+    onKickedSelf,
+    onClearMedia,
+  })
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-zinc-950 via-zinc-900 to-black">
@@ -161,7 +225,34 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <ViewersBar viewers={viewers} hostId={room.host_id} compact />
+          <VoteSkipButton
+            myVote={control.myVote}
+            voteCount={control.voteCount}
+            voteNeeded={control.voteNeeded}
+            disabled={!room.video_url}
+            onVote={control.voteSkip}
+          />
+          <VoiceBar
+            joined={voice.joined}
+            muted={voice.muted}
+            peerCount={voice.peers.size}
+            onJoin={voice.joinVoice}
+            onLeave={voice.leaveVoice}
+            onToggleMute={voice.toggleMute}
+          />
+          <ViewersBar
+            viewers={viewers}
+            hostId={room.host_id}
+            currentUserId={user.id}
+            isHost={isHost}
+            voicePeers={voice.peers}
+            amInVoice={voice.joined}
+            amMuted={voice.muted}
+            onTransferHost={(uid) => control.transferHost(uid)}
+            onKick={(uid) => control.kick(uid)}
+            onForceMute={(uid) => voice.forceMutePeer(uid)}
+            compact
+          />
           <ExpiryCountdown expiresAt={room.expires_at} />
           <InviteButton code={room.code} />
           <button
@@ -174,6 +265,13 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
           </button>
         </div>
       </header>
+
+      {/* Kicked toast */}
+      {kickedNotice && (
+        <div className="fixed inset-x-0 top-4 z-50 mx-auto w-fit rounded-xl border border-red-500/40 bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-200 shadow-lg backdrop-blur">
+          🚪 {kickedNotice}
+        </div>
+      )}
 
       {/* MAIN — video left, chat right. Full-bleed, no scrolling, dark cinema feel. */}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">

@@ -231,6 +231,18 @@ export default function VideoPlayer({ room, isHost }) {
     if (mediaUrl) setSourceOpen(false)
   }, [mediaUrl])
 
+  // External media changes (vote-skip clears, host-transferred-then-loaded,
+  // initial value coming through after a refresh): keep our local state in
+  // sync with the canonical room.video_url whenever it changes from outside.
+  useEffect(() => {
+    const incoming = room.video_url || ''
+    if (incoming !== mediaUrl) {
+      setMediaUrl(incoming)
+      setUrlInput(incoming)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room.video_url])
+
   // Track the browser's fullscreen state so the icon stays in sync when
   // the user exits via the Escape key or the native UI.
   useEffect(() => {

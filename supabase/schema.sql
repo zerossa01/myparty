@@ -52,8 +52,9 @@ alter table public.users    enable row level security;
 alter table public.messages enable row level security;
 
 -- ---- rooms ----------------------------------------------------------
-drop policy if exists "rooms_select_all"  on public.rooms;
-drop policy if exists "rooms_insert_self" on public.rooms;
+drop policy if exists "rooms_select_all"   on public.rooms;
+drop policy if exists "rooms_insert_self"  on public.rooms;
+drop policy if exists "rooms_update_host"  on public.rooms;
 
 create policy "rooms_select_all"
   on public.rooms for select
@@ -63,6 +64,14 @@ create policy "rooms_select_all"
 create policy "rooms_insert_self"
   on public.rooms for insert
   with check (auth.uid()::text = host_id);
+
+-- The current host can update the room (e.g. set video_url, transfer
+-- host_id to another user). After transferring host, the previous host
+-- loses update rights and the new one gets them.
+create policy "rooms_update_host"
+  on public.rooms for update
+  using (auth.uid()::text = host_id)
+  with check (true);
 
 -- ---- users ----------------------------------------------------------
 drop policy if exists "users_select_all"  on public.users;
