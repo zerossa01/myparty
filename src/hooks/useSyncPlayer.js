@@ -33,7 +33,7 @@ export function useSyncPlayer(roomId, isHost, controls) {
 
     channel.on('broadcast', { event: 'sync' }, ({ payload }) => {
       if (!payload || isHost) return // host doesn't mirror itself
-      const { type, time, videoId } = payload
+      const { type, time, mediaUrl, cues, subName } = payload
       const c = controlsRef.current
       if (!c) return
       try {
@@ -45,8 +45,10 @@ export function useSyncPlayer(roomId, isHost, controls) {
           c.pause()
         } else if (type === 'seek') {
           c.seekTo(time, true)
-        } else if (type === 'video' && videoId) {
-          c.setVideoId?.(videoId)
+        } else if (type === 'video' && mediaUrl) {
+          c.setMediaUrl?.(mediaUrl)
+        } else if (type === 'subtitles') {
+          c.setCues?.(Array.isArray(cues) ? cues : null, subName || '')
         }
       } catch (err) {
         console.warn('[useSyncPlayer] mirror failed', err)
@@ -55,18 +57,28 @@ export function useSyncPlayer(roomId, isHost, controls) {
     })
 
     // When a guest first subscribes, ask the host (if any) to send the
-    // current video so we don't sit on "Waiting…" forever.
+    // current media URL so we don't sit on "Waiting…" forever. Also send
+    // subtitles if any are loaded.
     channel.on('broadcast', { event: 'whoami' }, () => {
       if (!isHost) return
       const c = controlsRef.current
-      if (!c?.getVideoId) return
-      const vid = c.getVideoId()
-      if (!vid) return
-      channel.send({
-        type: 'broadcast',
-        event: 'sync',
-        payload: { type: 'video', time: 0, videoId: vid },
-      })
+      const url = c?.getMediaUrl?.()
+      if (url) {
+        channel.send({
+          type: 'broadcast',
+          event: 'sync',
+          payload: { type: 'video', time: 0, mediaUrl: url },
+        })
+      }
+      const cues = c?.getCues?.()
+      const subName = c?.getSubName?.() || ''
+      if (Array.isArray(cues) && cues.length) {
+        channel.send({
+          type: 'broadcast',
+          event: 'sync',
+          payload: { type: 'subtitles', time: 0, cues, subName },
+        })
+      }
     })
 
     channel.subscribe((status) => {

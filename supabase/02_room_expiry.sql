@@ -17,21 +17,24 @@ create index if not exists rooms_expires_at_idx on public.rooms(expires_at);
 -- ---------------------------------------------------------------------
 create extension if not exists pg_cron;
 
--- Drop any prior version of the same job before re-scheduling.
+-- Drop any prior version of the same job (including the legacy pre-rename
+-- name 'rave_cleanup_expired_rooms') before re-scheduling.
 do $$
 declare
   jid bigint;
 begin
-  select jobid into jid from cron.job where jobname = 'rave_cleanup_expired_rooms';
-  if jid is not null then
+  for jid in
+    select jobid from cron.job
+    where jobname in ('partygram_cleanup_expired_rooms', 'rave_cleanup_expired_rooms')
+  loop
     perform cron.unschedule(jid);
-  end if;
+  end loop;
 end$$;
 
 -- Run hourly: delete every room that has expired (older than 24h since
 -- creation by default, or whatever expires_at says).
 select cron.schedule(
-  'rave_cleanup_expired_rooms',
+  'partygram_cleanup_expired_rooms',
   '0 * * * *',  -- every hour, on the hour
   $$ delete from public.rooms where expires_at < now(); $$
 );

@@ -52,7 +52,7 @@ export default function HomePage() {
       <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
         <a href="#hero" className="text-xl font-extrabold tracking-tight">
           <span className="bg-gradient-to-r from-fuchsia-400 to-cyan-400 bg-clip-text text-transparent">
-            RAVE
+            Partygram
           </span>
         </a>
         {user && (
@@ -73,7 +73,7 @@ export default function HomePage() {
       >
         <div className="text-center lg:text-left">
           <h1 className="bg-gradient-to-br from-fuchsia-300 via-fuchsia-400 to-cyan-300 bg-clip-text text-5xl font-extrabold leading-[1.05] tracking-tight text-transparent sm:text-6xl lg:text-7xl">
-            RAVE
+            Partygram
           </h1>
           <p className="mt-4 text-2xl font-semibold text-zinc-200 sm:text-3xl">
             Watch together. Feel together.
@@ -193,7 +193,7 @@ function MockupPreview() {
           <span className="h-2.5 w-2.5 rounded-full bg-red-500/70"></span>
           <span className="h-2.5 w-2.5 rounded-full bg-amber-400/70"></span>
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/70"></span>
-          <span className="ml-3 text-xs text-zinc-500">RAVE-4F2K · Friday Movie Night</span>
+          <span className="ml-3 text-xs text-zinc-500">PARTY-4F2K · Friday Movie Night</span>
         </div>
         <div className="grid gap-3 sm:grid-cols-[1fr_180px]">
           {/* Fake video */}

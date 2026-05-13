@@ -1,5 +1,5 @@
 -- =====================================================================
--- Rave Clone — Watch Party Schema
+-- Partygram — Watch Party Schema
 -- Paste this whole file into the Supabase SQL Editor and run it.
 -- =====================================================================
 

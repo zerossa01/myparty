@@ -1,8 +1,20 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabase.js'
 
-const LS_NAME = 'rave.displayName'
-const LS_AVATAR = 'rave.avatar'
+const LS_NAME = 'partygram.displayName'
+const LS_AVATAR = 'partygram.avatar'
+// Migrate any legacy keys from the pre-rename era.
+function readLegacy(key, legacyKey) {
+  const v = localStorage.getItem(key)
+  if (v) return v
+  const old = localStorage.getItem(legacyKey)
+  if (old) {
+    localStorage.setItem(key, old)
+    localStorage.removeItem(legacyKey)
+    return old
+  }
+  return ''
+}
 
 /**
  * useAuth
@@ -17,10 +29,10 @@ const LS_AVATAR = 'rave.avatar'
 export function useAuth() {
   const [user, setUser] = useState(null)
   const [displayName, setDisplayName] = useState(
-    () => localStorage.getItem(LS_NAME) || ''
+    () => readLegacy(LS_NAME, 'rave.displayName')
   )
   const [avatar, setAvatar] = useState(
-    () => localStorage.getItem(LS_AVATAR) || ''
+    () => readLegacy(LS_AVATAR, 'rave.avatar')
   )
   const [loading, setLoading] = useState(true)
 

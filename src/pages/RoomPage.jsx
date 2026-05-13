@@ -127,7 +127,7 @@ export default function RoomPage() {
 
 function RoomBody({ room, hostName, isHost, user, displayName }) {
   const presenceUser = useMemo(
-    () => ({ id: user.id, displayName, avatar: localStorage.getItem('rave.avatar') || '👤' }),
+    () => ({ id: user.id, displayName, avatar: localStorage.getItem('partygram.avatar') || localStorage.getItem('rave.avatar') || '👤' }),
     [user.id, displayName]
   )
   const { viewers, lastEvent } = usePresence(room.id, presenceUser)

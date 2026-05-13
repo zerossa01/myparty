@@ -105,7 +105,7 @@ export default function RoomActions() {
           value={joinCode}
           onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
           maxLength={12}
-          placeholder="RAVE-4F2K"
+          placeholder="PARTY-4F2K"
           className="mt-4 w-full min-h-[44px] rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono tracking-wider text-zinc-100 outline-none focus:border-cyan-400"
         />
         {joinErr && <div className="mt-2 text-sm text-red-400">{joinErr}</div>}

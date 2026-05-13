@@ -3,7 +3,7 @@ import { supabase } from './supabase.js'
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no I,O,0,1
 
 export function generateRoomCode() {
-  let code = 'RAVE-'
+  let code = 'PARTY-'
   for (let i = 0; i < 4; i++) {
     code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]
   }

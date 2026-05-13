@@ -1,4 +1,4 @@
-# Rave Clone — Watch Party
+# Partygram — Watch Party
 
 Watch YouTube videos together with friends in real-time synced rooms with live chat
 and presence. Built with Vite + React + Tailwind + Supabase — no accounts required.
@@ -63,7 +63,7 @@ keeps working on direct navigation / refresh.
 1. **Open the app** and pick a display name + an emoji avatar. You're signed in
    anonymously — no email, no password.
 2. **Create a room** with a name. You become the host and get a room code like
-   `RAVE-4F2K`.
+   `PARTY-4F2K`.
 3. **Share the code** (or invite link) with friends. They join from the
    homepage and land in the same room.
 4. **Paste a YouTube link** in the player input (host only). Press Play —
