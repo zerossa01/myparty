@@ -115,10 +115,19 @@ export function parseMediaUrl(input) {
     return mk('direct', trimmed, trimmed)
   }
 
-  // ──────────────── Direct video ───────────
+  // ──────────────── Direct video ─────────────
   // Recognized by file extension (or pathname looking like a media file).
   if (/\.(mp4|webm|mov|m4v|ogg|ogv)(\?|#|$)/i.test(path)) {
     return mk('direct', trimmed, trimmed)
+  }
+
+  // ──────────────── Generic iframe embed ─────────────
+  // Any other valid http(s) URL is treated as a third-party embed page
+  // (streamimdb.ru/embed/..., vidsrc, anime embed sites, etc.).
+  // Playback can't be synced (no JS API), but every viewer can watch on
+  // their own — same UX as Google Drive.
+  if (url.protocol === 'http:' || url.protocol === 'https:') {
+    return mk('iframe', trimmed, trimmed, { supportsSync: false })
   }
 
   return null
@@ -154,6 +163,10 @@ export function mediaLabel(media) {
     case 'vimeo':   return 'Vimeo'
     case 'direct':  return 'Video file'
     case 'drive':   return 'Google Drive'
+    case 'iframe': {
+      try { return new URL(media.url).hostname.replace(/^www\./, '') }
+      catch { return 'Embed' }
+    }
     default:        return media.kind
   }
 }

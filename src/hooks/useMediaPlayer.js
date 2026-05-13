@@ -199,6 +199,7 @@ const BUILDERS = {
   vimeo:    buildVimeo,
   direct:   buildDirect,
   drive:    buildDrive,
+  iframe:   buildIframe,
 }
 
 const STATE_MAP_YT = {
@@ -434,23 +435,35 @@ async function buildDirect(container, media, handlers /* , cleanupRef */) {
   }
 }
 
-async function buildDrive(container, media, handlers /* , cleanupRef */) {
-  // Google Drive has no public JS player API. We embed the preview iframe
-  // and treat playback as un-controllable from our app — host & guests will
-  // each play the video on their own.
+/**
+ * Build a "dumb iframe" player — used for Google Drive AND any generic
+ * third-party embed (streamimdb, vidsrc, anime embed sites…). Playback can't
+ * be synced (no JS API), but every viewer can play it on their own.
+ *
+ * The iframe gets a permissive `allow` + `sandbox` so most embed providers
+ * (which try to autoplay, open popouts, or use the Presentation API) work.
+ */
+function mountIframe(container, src) {
   const iframe = document.createElement('iframe')
-  iframe.src = `https://drive.google.com/file/d/${media.id}/preview`
+  iframe.src = src
   iframe.style.width = '100%'
   iframe.style.height = '100%'
   iframe.style.border = '0'
-  iframe.allow = 'autoplay; fullscreen'
-
+  iframe.allow = 'autoplay; fullscreen; picture-in-picture; encrypted-media; clipboard-write'
+  iframe.setAttribute(
+    'sandbox',
+    'allow-scripts allow-same-origin allow-forms allow-popups allow-presentation allow-popups-to-escape-sandbox'
+  )
+  iframe.setAttribute('allowfullscreen', 'true')
+  iframe.setAttribute('referrerpolicy', 'no-referrer-when-downgrade')
   container.innerHTML = ''
   container.appendChild(iframe)
+  return iframe
+}
 
-  // Mark "ready" immediately so the controls don't sit disabled forever.
+async function buildDrive(container, media, handlers /* , cleanupRef */) {
+  const iframe = mountIframe(container, `https://drive.google.com/file/d/${media.id}/preview`)
   setTimeout(() => handlers.onReady({ duration: 0 }), 100)
-
   return {
     destroy: () => { try { iframe.remove() } catch { /* */ } },
     play:  () => { /* unsupported */ },
@@ -461,5 +474,22 @@ async function buildDrive(container, media, handlers /* , cleanupRef */) {
     loadMedia: (m) => {
       iframe.src = `https://drive.google.com/file/d/${m.id}/preview`
     },
+  }
+}
+
+async function buildIframe(container, media, handlers /* , cleanupRef */) {
+  // Generic third-party embed (streamimdb.ru, vidsrc, anime sites, etc.).
+  // No JS bridge — treat exactly like Google Drive: each viewer plays
+  // their own copy and we just surface fullscreen / volume locally.
+  const iframe = mountIframe(container, media.url)
+  setTimeout(() => handlers.onReady({ duration: 0 }), 100)
+  return {
+    destroy: () => { try { iframe.remove() } catch { /* */ } },
+    play:  () => { /* unsupported */ },
+    pause: () => { /* unsupported */ },
+    seekTo: () => { /* unsupported */ },
+    getCurrentTime: () => 0,
+    getDuration: () => 0,
+    loadMedia: (m) => { iframe.src = m.url },
   }
 }

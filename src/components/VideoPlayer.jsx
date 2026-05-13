@@ -18,6 +18,7 @@ const URL_PLACEHOLDERS = {
   vimeo:   'Paste a Vimeo URL (vimeo.com/…)',
   direct:  'Paste a direct video URL (.mp4 / .webm / .mov / .m3u8)',
   drive:   'Paste a public Google Drive video link (drive.google.com/file/d/…)',
+  iframe:  'Paste any embed URL (streamimdb.ru/embed/…, vidsrc, anime sites, …)',
 }
 
 function formatTime(s) {

@@ -13,6 +13,7 @@ const TABS = [
   { id: 'vimeo',   label: 'Vimeo',    hint: '🟦' },
   { id: 'direct',  label: 'File URL', hint: '📁' },
   { id: 'drive',   label: 'Drive',    hint: '💾' },
+  { id: 'iframe',  label: 'Embed',    hint: '🌐' },
 ]
 
 export default function SourceTabs({ value, onChange, disabled }) {
