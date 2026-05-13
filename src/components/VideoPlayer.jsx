@@ -472,17 +472,18 @@ export default function VideoPlayer({ room, isHost }) {
           {isFullscreen && controlsBar}
         </div>
 
-        {/* Floating change-source button — icon-only, shows only when a video
-            is loaded (otherwise the source drawer is already open). */}
-        {isHost && !isFullscreen && mediaUrl && !sourceOpen && (
+        {/* Floating "Media URL" pill — host-only.
+            Visible whenever the source drawer is closed so the host always
+            has an obvious entry-point to load a new video. */}
+        {isHost && !isFullscreen && !sourceOpen && (
           <button
             type="button"
             onClick={() => setSourceOpen(true)}
-            className="absolute left-3 top-3 z-30 inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700/70 bg-black/60 text-zinc-200 backdrop-blur transition hover:border-fuchsia-500/60 hover:text-fuchsia-200"
+            className="absolute left-3 top-3 z-30 inline-flex items-center gap-2 rounded-lg border border-zinc-700/70 bg-black/70 px-3 py-1.5 text-xs font-semibold text-zinc-200 backdrop-blur transition hover:border-fuchsia-500/60 hover:text-fuchsia-200"
             title="Change media source"
-            aria-label="Change media source"
           >
             <LinkIcon />
+            <span>Media URL</span>
           </button>
         )}
 
