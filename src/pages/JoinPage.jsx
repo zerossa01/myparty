@@ -21,28 +21,41 @@ export default function JoinPage() {
   const ready = !loading && user && displayName && avatar
 
   useEffect(() => {
-    if (!ready || working) return
+    if (!ready) return
     let cancelled = false
     setWorking(true)
-    ;(async () => {
-      try {
-        const room = await joinRoomByCode({
-          code: roomCode,
-          user,
-          displayName,
-          avatar,
-        })
+    setError(null)
+
+    // 10-second timeout so the page can't hang forever on a stuck network
+    // request. If we still haven't resolved by then, show a clear error.
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(
+        'Timed out reaching the server. Check your connection and try again.'
+      )), 10_000)
+    )
+
+    Promise.race([
+      joinRoomByCode({ code: roomCode, user, displayName, avatar }),
+      timeoutPromise,
+    ])
+      .then((room) => {
         if (!cancelled) navigate(`/room/${room.id}`, { replace: true })
-      } catch (err) {
-        if (!cancelled) setError(err.message || 'Could not join.')
-      } finally {
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          console.error('[JoinPage]', err)
+          setError(err.message || 'Could not join.')
+        }
+      })
+      .finally(() => {
         if (!cancelled) setWorking(false)
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [ready, roomCode, user, displayName, avatar, navigate, working])
+      })
+
+    return () => { cancelled = true }
+  // We deliberately only re-run when the auth becomes ready or the code
+  // changes — not when `working` flips, which would cause a loop.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, roomCode])
 
   return (
     <div className="flex min-h-full items-center justify-center bg-gradient-to-br from-zinc-950 via-zinc-900 to-black p-6">
