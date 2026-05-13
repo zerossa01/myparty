@@ -35,8 +35,14 @@ create table if not exists public.messages (
   room_id     uuid not null references public.rooms(id) on delete cascade,
   user_id     uuid not null references public.users(id) on delete cascade,
   text        text not null,
-  created_at  timestamptz not null default now()
+  created_at  timestamptz not null default now(),
+  reply_to    uuid references public.messages(id) on delete set null,
+  reactions   jsonb not null default '{}'::jsonb
 );
+
+-- Backfill columns when running on an older deployment
+alter table public.messages add column if not exists reply_to  uuid references public.messages(id) on delete set null;
+alter table public.messages add column if not exists reactions jsonb not null default '{}'::jsonb;
 
 -- Helpful indexes
 create index if not exists rooms_code_idx          on public.rooms(code);
@@ -121,3 +127,45 @@ alter publication supabase_realtime add table public.messages;
 alter table public.rooms    replica identity full;
 alter table public.users    replica identity full;
 alter table public.messages replica identity full;
+
+-- =====================================================================
+-- Reactions RPC
+-- =====================================================================
+-- toggle_reaction(msg_id, emoji): adds or removes the calling user from the
+-- reactions list for that emoji on the given message. Stored as
+-- { "👍": ["uid1","uid2"], "❤️": ["uid3"] }. Runs SECURITY DEFINER so any
+-- authenticated guest can react without needing broad UPDATE rights on the
+-- messages table.
+create or replace function public.toggle_reaction(msg_id uuid, emoji text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid     text  := auth.uid()::text;
+  current jsonb;
+  list    jsonb;
+begin
+  if uid is null then raise exception 'not authenticated'; end if;
+  select reactions into current from public.messages where id = msg_id for update;
+  if current is null then return; end if;
+  list := coalesce(current -> emoji, '[]'::jsonb);
+  if list ? uid then
+    list := coalesce(
+      (select jsonb_agg(x) from jsonb_array_elements_text(list) x where x <> uid),
+      '[]'::jsonb
+    );
+  else
+    list := list || to_jsonb(uid);
+  end if;
+  if jsonb_array_length(list) = 0 then
+    current := current - emoji;
+  else
+    current := jsonb_set(current, array[emoji], list);
+  end if;
+  update public.messages set reactions = current where id = msg_id;
+end;
+$$;
+
+grant execute on function public.toggle_reaction(uuid, text) to authenticated, anon;

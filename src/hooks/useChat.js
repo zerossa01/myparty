@@ -70,7 +70,7 @@ export function useChat(roomId, user) {
       // 2. Last 50 messages, oldest first.
       const { data: msgs } = await supabase
         .from('messages')
-        .select('id, room_id, user_id, text, created_at')
+        .select('id, room_id, user_id, text, created_at, reply_to, reactions')
         .eq('room_id', roomId)
         .order('created_at', { ascending: false })
         .limit(50)
@@ -103,6 +103,21 @@ export function useChat(roomId, user) {
           })
         }
       )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `room_id=eq.${roomId}`,
+        },
+        (payload) => {
+          const row = payload.new
+          setMessages((prev) =>
+            prev.map((m) => (m.id === row.id ? decorate({ ...m, ...row }) : m))
+          )
+        }
+      )
       .subscribe()
 
     return () => {
@@ -112,13 +127,14 @@ export function useChat(roomId, user) {
   }, [roomId, decorate, ensureUser])
 
   const sendMessage = useCallback(
-    async (text) => {
+    async (text, replyTo = null) => {
       const trimmed = (text || '').trim()
       if (!trimmed || !user || !roomId) return
       const { error } = await supabase.from('messages').insert({
         room_id: roomId,
         user_id: user.id,
         text: trimmed,
+        reply_to: replyTo || null,
       })
       if (error) {
         console.warn('[useChat] sendMessage failed', error)
@@ -128,5 +144,33 @@ export function useChat(roomId, user) {
     [roomId, user]
   )
 
-  return { messages, sendMessage, loading }
+  // Toggle a reaction on a message. Optimistically updates local state,
+  // then calls the SECURITY DEFINER RPC. Realtime UPDATE will reconcile
+  // with the canonical server value.
+  const toggleReaction = useCallback(
+    async (messageId, emoji) => {
+      if (!messageId || !emoji || !user) return
+      setMessages((prev) =>
+        prev.map((m) => {
+          if (m.id !== messageId) return m
+          const r = { ...(m.reactions || {}) }
+          const list = Array.isArray(r[emoji]) ? [...r[emoji]] : []
+          const idx = list.indexOf(user.id)
+          if (idx >= 0) list.splice(idx, 1)
+          else list.push(user.id)
+          if (list.length === 0) delete r[emoji]
+          else r[emoji] = list
+          return { ...m, reactions: r }
+        })
+      )
+      const { error } = await supabase.rpc('toggle_reaction', {
+        msg_id: messageId,
+        emoji,
+      })
+      if (error) console.warn('[useChat] toggleReaction failed', error)
+    },
+    [user]
+  )
+
+  return { messages, sendMessage, toggleReaction, loading }
 }

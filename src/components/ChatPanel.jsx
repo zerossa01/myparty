@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useChat } from '../hooks/useChat.js'
 
 // Stable color per user id.
@@ -30,11 +30,23 @@ function formatTime(iso) {
   }
 }
 
+const REACTION_PALETTE = ['👍', '❤️', '😂', '🔥', '😮', '😢', '🎉', '👏']
+
 export default function ChatPanel({ roomId, user, onClose }) {
-  const { messages, sendMessage, loading } = useChat(roomId, user)
+  const { messages, sendMessage, toggleReaction, loading } = useChat(roomId, user)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [replyTo, setReplyTo] = useState(null)         // message object being replied to
+  const [pickerFor, setPickerFor] = useState(null)     // message id whose reaction picker is open
   const scrollRef = useRef(null)
+  const inputRef = useRef(null)
+
+  // Build a quick lookup so reply quotes can render the original message text.
+  const messagesById = useMemo(() => {
+    const m = new Map()
+    for (const x of messages) m.set(x.id, x)
+    return m
+  }, [messages])
 
   useEffect(() => {
     const el = scrollRef.current
@@ -48,13 +60,25 @@ export default function ChatPanel({ roomId, user, onClose }) {
     if (!text || sending) return
     setSending(true)
     try {
-      await sendMessage(text)
+      await sendMessage(text, replyTo?.id || null)
       setDraft('')
+      setReplyTo(null)
     } catch {
       /* surface as inline could be added */
     } finally {
       setSending(false)
     }
+  }
+
+  function startReply(msg) {
+    setReplyTo(msg)
+    setPickerFor(null)
+    setTimeout(() => inputRef.current?.focus(), 0)
+  }
+
+  function handleReact(messageId, emoji) {
+    toggleReaction(messageId, emoji)
+    setPickerFor(null)
   }
 
   function onKeyDown(e) {
@@ -106,19 +130,40 @@ export default function ChatPanel({ roomId, user, onClose }) {
         )}
         {messages.map((m) => {
           const mine = user && m.user_id === user.id
+          const replied = m.reply_to ? messagesById.get(m.reply_to) : null
+          const reactions = m.reactions || {}
+          const reactionEntries = Object.entries(reactions).filter(
+            ([, list]) => Array.isArray(list) && list.length > 0
+          )
+          const isPickerOpen = pickerFor === m.id
           return (
             <div
               key={m.id}
-              className={'flex ' + (mine ? 'justify-end' : 'justify-start')}
+              className={'group relative flex ' + (mine ? 'justify-end' : 'justify-start')}
             >
               <div
                 className={
-                  'max-w-[85%] rounded-2xl px-3 py-2 text-sm ' +
+                  'relative max-w-[85%] rounded-2xl px-3 py-2 text-sm ' +
                   (mine
                     ? 'bg-fuchsia-500/20 text-zinc-100'
                     : 'bg-zinc-800 text-zinc-100')
                 }
               >
+                {/* Reply quote */}
+                {replied && (
+                  <div className="mb-1 rounded-md border-l-2 border-fuchsia-400/60 bg-black/25 px-2 py-1 text-[11px] leading-tight">
+                    <div className={'font-semibold ' + colorFor(replied.user_id)}>
+                      ↪ {replied.user_id === user?.id ? 'You' : replied.displayName}
+                    </div>
+                    <div className="truncate text-zinc-400">{replied.text}</div>
+                  </div>
+                )}
+                {m.reply_to && !replied && (
+                  <div className="mb-1 rounded-md border-l-2 border-zinc-600 bg-black/25 px-2 py-1 text-[11px] italic text-zinc-500">
+                    ↪ original message
+                  </div>
+                )}
+
                 <div
                   className={
                     'flex items-center gap-1.5 text-xs ' +
@@ -136,6 +181,81 @@ export default function ChatPanel({ roomId, user, onClose }) {
                 <div className="mt-1 break-words whitespace-pre-wrap">
                   {m.text}
                 </div>
+
+                {/* Reaction chips */}
+                {reactionEntries.length > 0 && (
+                  <div className={'mt-1.5 flex flex-wrap gap-1 ' + (mine ? 'justify-end' : '')}>
+                    {reactionEntries.map(([emoji, list]) => {
+                      const reactedByMe = user && list.includes(user.id)
+                      return (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleReact(m.id, emoji)}
+                          className={
+                            'inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] leading-none transition ' +
+                            (reactedByMe
+                              ? 'border-fuchsia-400/60 bg-fuchsia-500/30 text-white'
+                              : 'border-zinc-700 bg-zinc-900/60 text-zinc-300 hover:border-zinc-500')
+                          }
+                          title={reactedByMe ? 'Remove your reaction' : 'React'}
+                        >
+                          <span>{emoji}</span>
+                          <span className="font-semibold">{list.length}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Hover/active toolbar */}
+                <div
+                  className={
+                    'absolute -top-3 z-10 flex items-center gap-0.5 rounded-full border border-zinc-700 bg-zinc-900/95 px-1 py-0.5 shadow-lg transition ' +
+                    (mine ? 'left-1' : 'right-1') + ' ' +
+                    (isPickerOpen
+                      ? 'opacity-100'
+                      : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100')
+                  }
+                >
+                  <button
+                    type="button"
+                    onClick={() => setPickerFor(isPickerOpen ? null : m.id)}
+                    className="flex h-6 w-6 items-center justify-center rounded-full text-xs hover:bg-zinc-800"
+                    title="Add reaction"
+                  >
+                    😊
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => startReply(m)}
+                    className="flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800"
+                    title="Reply"
+                  >
+                    ↪ Reply
+                  </button>
+                </div>
+
+                {/* Reaction picker popover */}
+                {isPickerOpen && (
+                  <div
+                    className={
+                      'absolute -top-11 z-20 flex items-center gap-0.5 rounded-full border border-zinc-700 bg-zinc-900 px-1.5 py-1 shadow-xl ' +
+                      (mine ? 'left-1' : 'right-1')
+                    }
+                  >
+                    {REACTION_PALETTE.map((e) => (
+                      <button
+                        key={e}
+                        type="button"
+                        onClick={() => handleReact(m.id, e)}
+                        className="flex h-7 w-7 items-center justify-center rounded-full text-base transition hover:scale-125 hover:bg-zinc-800"
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )
@@ -157,18 +277,38 @@ export default function ChatPanel({ roomId, user, onClose }) {
         ))}
       </div>
 
+      {/* Reply preview */}
+      {replyTo && (
+        <div className="flex items-center gap-2 border-t border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-[11px]">
+          <span className="text-fuchsia-300">↪ Replying to</span>
+          <span className={'font-semibold ' + colorFor(replyTo.user_id)}>
+            {replyTo.user_id === user?.id ? 'yourself' : replyTo.displayName}
+          </span>
+          <span className="flex-1 truncate text-zinc-400">{replyTo.text}</span>
+          <button
+            type="button"
+            onClick={() => setReplyTo(null)}
+            aria-label="Cancel reply"
+            className="flex h-5 w-5 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Input */}
       <form
         onSubmit={handleSend}
         className="flex items-center gap-2 border-t border-zinc-800 p-2"
       >
         <input
+          ref={inputRef}
           type="text"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
           maxLength={500}
-          placeholder="Say something…"
+          placeholder={replyTo ? 'Write a reply…' : 'Say something…'}
           className="min-h-[40px] flex-1 rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm outline-none focus:border-fuchsia-400"
         />
         <button
