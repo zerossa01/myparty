@@ -25,6 +25,20 @@ export default function RoomPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Manual refetch — usable as a hard fallback when realtime is delayed or
+  // not configured for the rooms table. Exposed to RoomBody so a successful
+  // moderation action can force every client to re-sync immediately.
+  const refreshRoom = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('rooms')
+      .select('*')
+      .eq('id', roomId)
+      .maybeSingle()
+    if (error) { console.warn('[room] refresh failed', error); return null }
+    if (data) setRoom(data)
+    return data
+  }, [roomId])
+
   useEffect(() => {
     let cancelled = false
     async function load() {
@@ -51,8 +65,13 @@ export default function RoomPage() {
 
     // Live-update the room row so host transfers, video clears, etc. are
     // reflected immediately for everyone.
+    //   1. postgres_changes — fast, depends on the rooms table being in the
+    //      supabase_realtime publication
+    //   2. broadcast 'room:changed' — fired manually after every successful
+    //      moderation action so it works even if (1) is misconfigured
+    //   3. polling every 5s as the last-resort safety net
     const ch = supabase
-      .channel(`room-row-${roomId}`)
+      .channel(`room-row-${roomId}`, { config: { broadcast: { self: true } } })
       .on(
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
@@ -63,13 +82,19 @@ export default function RoomPage() {
         { event: 'DELETE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` },
         () => { if (!cancelled) navigate('/', { replace: true }) }
       )
+      .on('broadcast', { event: 'room:changed' }, () => {
+        if (!cancelled) refreshRoom()
+      })
       .subscribe()
+
+    const poll = setInterval(() => { if (!cancelled) refreshRoom() }, 5000)
 
     return () => {
       cancelled = true
+      clearInterval(poll)
       try { supabase.removeChannel(ch) } catch { /* */ }
     }
-  }, [roomId, navigate])
+  }, [roomId, navigate, refreshRoom])
 
   // Re-resolve host display_name whenever the host_id changes (host transfer)
   useEffect(() => {
@@ -150,11 +175,12 @@ export default function RoomPage() {
       isHost={isHost}
       user={user}
       displayName={displayName}
+      refreshRoom={refreshRoom}
     />
   )
 }
 
-function RoomBody({ room, hostName, isHost, user, displayName }) {
+function RoomBody({ room, hostName, isHost, user, displayName, refreshRoom }) {
   const presenceUser = useMemo(
     () => ({ id: user.id, displayName, avatar: localStorage.getItem('partygram.avatar') || localStorage.getItem('rave.avatar') || '👤' }),
     [user.id, displayName]
@@ -250,11 +276,15 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
     const name = viewersById.get(uid)?.displayName || 'that user'
     try {
       await control.transferHost(uid)
+      // Force-refresh our own copy of the room row in case realtime is slow
+      // or not configured for the rooms table. Other clients catch up via
+      // the 5s polling safety net inside RoomPage.
+      await refreshRoom()
       showToast('ok', `👑 ${name} is now the host`)
     } catch (e) {
       showToast('err', e?.message || 'Could not transfer host')
     }
-  }, [control, viewersById, showToast])
+  }, [control, viewersById, showToast, refreshRoom])
 
   const handleKick = useCallback(async (uid) => {
     const name = viewersById.get(uid)?.displayName || 'that user'

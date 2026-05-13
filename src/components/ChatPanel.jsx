@@ -40,6 +40,9 @@ export default function ChatPanel({ roomId, user, onClose }) {
   const [pickerFor, setPickerFor] = useState(null)     // message id whose reaction picker is open
   const scrollRef = useRef(null)
   const inputRef = useRef(null)
+  // Long-press handling for touch devices — schedule the context menu
+  // after 450ms; movement / lift cancels it.
+  const longPressRef = useRef({ timer: null, msgId: null })
 
   // Build a quick lookup so reply quotes can render the original message text.
   const messagesById = useMemo(() => {
@@ -53,6 +56,20 @@ export default function ChatPanel({ roomId, user, onClose }) {
     if (!el) return
     el.scrollTop = el.scrollHeight
   }, [messages.length])
+
+  // Close any open context menu when clicking anywhere outside a message bubble.
+  useEffect(() => {
+    if (!pickerFor) return
+    function onDoc(e) {
+      if (!(e.target instanceof Element)) return
+      if (!e.target.closest('[data-msg-bubble]')) setPickerFor(null)
+    }
+    const t = setTimeout(() => document.addEventListener('mousedown', onDoc), 0)
+    return () => {
+      clearTimeout(t)
+      document.removeEventListener('mousedown', onDoc)
+    }
+  }, [pickerFor])
 
   async function handleSend(e) {
     e?.preventDefault?.()
@@ -79,6 +96,30 @@ export default function ChatPanel({ roomId, user, onClose }) {
   function handleReact(messageId, emoji) {
     toggleReaction(messageId, emoji)
     setPickerFor(null)
+  }
+
+  // ── Context-menu triggers ─────────────────────────────────────────────
+  function openContextMenu(msg) {
+    setPickerFor(msg.id)
+    // Subtle haptic feedback on supported mobile devices.
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try { navigator.vibrate(15) } catch { /* */ }
+    }
+  }
+  function onBubbleContextMenu(e, msg) {
+    e.preventDefault()
+    openContextMenu(msg)
+  }
+  function onTouchStart(msg) {
+    cancelLongPress()
+    longPressRef.current.msgId = msg.id
+    longPressRef.current.timer = setTimeout(() => openContextMenu(msg), 450)
+  }
+  function cancelLongPress() {
+    if (longPressRef.current.timer) {
+      clearTimeout(longPressRef.current.timer)
+      longPressRef.current.timer = null
+    }
   }
 
   function onKeyDown(e) {
@@ -142,12 +183,18 @@ export default function ChatPanel({ roomId, user, onClose }) {
               className={'group relative flex ' + (mine ? 'justify-end' : 'justify-start')}
             >
               <div
+                data-msg-bubble
                 className={
-                  'relative max-w-[85%] rounded-2xl px-3 py-2 text-sm ' +
+                  'relative max-w-[85%] cursor-default select-none rounded-2xl px-3 py-2 text-sm ' +
                   (mine
                     ? 'bg-fuchsia-500/20 text-zinc-100'
                     : 'bg-zinc-800 text-zinc-100')
                 }
+                onContextMenu={(e) => onBubbleContextMenu(e, m)}
+                onTouchStart={() => onTouchStart(m)}
+                onTouchEnd={cancelLongPress}
+                onTouchMove={cancelLongPress}
+                onTouchCancel={cancelLongPress}
               >
                 {/* Reply quote */}
                 {replied && (
@@ -236,11 +283,12 @@ export default function ChatPanel({ roomId, user, onClose }) {
                   </button>
                 </div>
 
-                {/* Reaction picker popover */}
+                {/* Context menu — opens on hover-😊, right-click, or long-press.
+                    Contains the emoji palette plus a Reply shortcut. */}
                 {isPickerOpen && (
                   <div
                     className={
-                      'absolute -top-11 z-20 flex items-center gap-0.5 rounded-full border border-zinc-700 bg-zinc-900 px-1.5 py-1 shadow-xl ' +
+                      'absolute -top-12 z-20 flex items-center gap-0.5 rounded-full border border-zinc-700 bg-zinc-900 px-1.5 py-1 shadow-xl ' +
                       (mine ? 'left-1' : 'right-1')
                     }
                   >
@@ -254,6 +302,23 @@ export default function ChatPanel({ roomId, user, onClose }) {
                         {e}
                       </button>
                     ))}
+                    <span className="mx-1 h-5 w-px bg-zinc-700" aria-hidden />
+                    <button
+                      type="button"
+                      onClick={() => { startReply(m); setPickerFor(null) }}
+                      className="flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-semibold text-fuchsia-300 hover:bg-zinc-800"
+                      title="Reply"
+                    >
+                      ↪ Reply
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { navigator.clipboard?.writeText(m.text); setPickerFor(null) }}
+                      className="flex h-7 items-center gap-1 rounded-full px-2 text-[11px] font-semibold text-zinc-300 hover:bg-zinc-800"
+                      title="Copy text"
+                    >
+                      ⧉
+                    </button>
                   </div>
                 )}
               </div>
