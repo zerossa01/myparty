@@ -43,18 +43,9 @@ export default function UserActionsMenu({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full z-[70] mt-2 w-48 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl"
+      className="border-t border-zinc-800 bg-zinc-950/80"
       role="menu"
     >
-      <div className="border-b border-zinc-800 px-3 py-2 text-xs">
-        <div className="flex items-center gap-2">
-          <span className="text-base">{user.avatar || '👤'}</span>
-          <span className="truncate font-semibold text-zinc-200">
-            {user.displayName || 'Guest'}
-          </span>
-        </div>
-      </div>
-
       <button
         type="button"
         onClick={() => { onTransferHost?.(); onClose?.() }}
@@ -81,9 +72,17 @@ export default function UserActionsMenu({
             onClose?.()
           }
         }}
-        className="flex w-full items-center gap-2 border-t border-zinc-800 px-3 py-2 text-left text-xs font-semibold text-red-400 hover:bg-red-500/10"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-semibold text-red-400 hover:bg-red-500/10"
       >
         <span>🚪</span> Kick from room
+      </button>
+
+      <button
+        type="button"
+        onClick={() => onClose?.()}
+        className="flex w-full items-center justify-center gap-1 border-t border-zinc-800 px-3 py-1.5 text-[10px] font-semibold text-zinc-500 hover:bg-zinc-800"
+      >
+        Cancel
       </button>
     </div>
   )
