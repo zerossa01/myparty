@@ -68,12 +68,24 @@ export function useChat(roomId, user) {
       }
 
       // 2. Last 50 messages, oldest first.
-      const { data: msgs } = await supabase
+      // Try with the new columns; fall back to the legacy schema if the
+      // migration hasn't been applied yet.
+      let { data: msgs, error: msgsErr } = await supabase
         .from('messages')
         .select('id, room_id, user_id, text, created_at, reply_to, reactions')
         .eq('room_id', roomId)
         .order('created_at', { ascending: false })
         .limit(50)
+      if (msgsErr && /reply_to|reactions/i.test(msgsErr.message || '')) {
+        console.warn('[useChat] new columns missing — falling back to legacy schema')
+        const r = await supabase
+          .from('messages')
+          .select('id, room_id, user_id, text, created_at')
+          .eq('room_id', roomId)
+          .order('created_at', { ascending: false })
+          .limit(50)
+        msgs = r.data
+      }
       if (cancelled) return
       const ordered = (msgs || []).slice().reverse()
       setMessages(ordered.map(decorate))
@@ -130,12 +142,22 @@ export function useChat(roomId, user) {
     async (text, replyTo = null) => {
       const trimmed = (text || '').trim()
       if (!trimmed || !user || !roomId) return
-      const { error } = await supabase.from('messages').insert({
+      // Only include reply_to when actually replying — keeps inserts working
+      // on older deployments where the column hasn't been added yet.
+      const payload = {
         room_id: roomId,
         user_id: user.id,
         text: trimmed,
-        reply_to: replyTo || null,
-      })
+      }
+      if (replyTo) payload.reply_to = replyTo
+      let { error } = await supabase.from('messages').insert(payload)
+      // If the schema cache doesn't know reply_to yet, retry without it so
+      // the message still goes through. The user can run the migration later.
+      if (error && replyTo && /reply_to/i.test(error.message || '')) {
+        console.warn('[useChat] reply_to column missing — retrying without reply')
+        delete payload.reply_to
+        ;({ error } = await supabase.from('messages').insert(payload))
+      }
       if (error) {
         console.warn('[useChat] sendMessage failed', error)
         throw error
