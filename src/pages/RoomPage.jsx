@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth.js'
 import { supabase } from '../lib/supabase.js'
@@ -161,9 +161,41 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
   )
   const { viewers, lastEvent } = usePresence(room.id, presenceUser)
   const [chatOpen, setChatOpen] = useState(false)
+  const [unread, setUnread] = useState(0)
   const [kickedNotice, setKickedNotice] = useState(null)
   const isDesktop = useMediaQuery('(min-width: 1024px)') // tailwind lg
   const navigate = useNavigate()
+
+  // Unread-message badge: count INSERTs into messages while the chat is
+  // hidden (mobile drawer closed). Reset to 0 the moment chat is opened.
+  // On desktop the chat panel is always visible, so we never increment.
+  const chatVisible = isDesktop || chatOpen
+  useEffect(() => {
+    if (chatVisible) setUnread(0)
+  }, [chatVisible])
+
+  useEffect(() => {
+    const ch = supabase
+      .channel(`room-msg-badge-${room.id}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${room.id}` },
+        ({ new: row }) => {
+          if (!row) return
+          if (row.user_id === user.id) return // ignore own messages
+          // Read latest visibility synchronously from the closure-captured ref
+          // via a state updater (avoids stale closure issues).
+          setUnread((n) => (chatVisibleRef.current ? 0 : n + 1))
+        }
+      )
+      .subscribe()
+    return () => { try { supabase.removeChannel(ch) } catch { /* */ } }
+  }, [room.id, user.id])
+
+  // Keep a ref of chatVisible so the realtime callback always reads the
+  // latest value without re-subscribing on every toggle.
+  const chatVisibleRef = useRef(chatVisible)
+  useEffect(() => { chatVisibleRef.current = chatVisible }, [chatVisible])
 
   const presentIds = useMemo(() => viewers.map((v) => v.id), [viewers])
 
@@ -304,10 +336,15 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
       <button
         type="button"
         onClick={() => setChatOpen(true)}
-        aria-label="Open chat"
+        aria-label={unread > 0 ? `Open chat (${unread} new)` : 'Open chat'}
         className="fixed bottom-5 right-5 z-30 flex h-14 w-14 items-center justify-center rounded-full bg-fuchsia-500 text-2xl shadow-lg shadow-fuchsia-500/40 hover:bg-fuchsia-400 lg:hidden"
       >
         💬
+        {unread > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-6 min-w-[1.5rem] items-center justify-center rounded-full border-2 border-zinc-950 bg-red-500 px-1 text-[11px] font-bold leading-none text-white shadow-lg">
+            {unread > 99 ? '99+' : unread}
+          </span>
+        )}
       </button>
 
       {/* Mobile drawer backdrop */}
