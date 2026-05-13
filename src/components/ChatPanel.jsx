@@ -64,27 +64,32 @@ export default function ChatPanel({ roomId, user, onClose }) {
     }
   }
 
+  const QUICK_REACTIONS = ['😀', '❤️', '🔥', '👏', '😂', '🎉', '😮', '😢']
+  function quickSend(emoji) {
+    setDraft((d) => (d ? d + emoji : emoji))
+  }
+
   return (
-    <aside className="flex h-full w-full shrink-0 flex-col rounded-2xl border border-zinc-800 bg-zinc-900/60 lg:w-[280px]">
-      <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-        <div>
-          <h3 className="text-sm font-semibold tracking-wide text-zinc-200">
-            Chat
-          </h3>
-          <p className="text-xs text-zinc-500">Say hi to the room</p>
+    <aside className="flex h-full w-full flex-col bg-zinc-950">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <span className="flex h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+          <h3 className="text-sm font-bold tracking-wide text-zinc-100">Chat</h3>
         </div>
         {onClose && (
           <button
             type="button"
             onClick={onClose}
             aria-label="Close chat"
-            className="flex h-11 w-11 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 lg:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 lg:hidden"
           >
             <span className="text-xl leading-none">×</span>
           </button>
         )}
       </div>
 
+      {/* Messages */}
       <div
         ref={scrollRef}
         className="flex-1 space-y-2 overflow-y-auto px-3 py-3"
@@ -93,8 +98,10 @@ export default function ChatPanel({ roomId, user, onClose }) {
           <div className="text-center text-xs text-zinc-500">Loading…</div>
         )}
         {!loading && messages.length === 0 && (
-          <div className="text-center text-xs text-zinc-500">
-            No messages yet.
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+            <span className="text-3xl opacity-30">💬</span>
+            <span className="text-xs text-zinc-500">No messages yet.</span>
+            <span className="text-[11px] text-zinc-600">Be the first to say something!</span>
           </div>
         )}
         {messages.map((m) => {
@@ -135,9 +142,25 @@ export default function ChatPanel({ roomId, user, onClose }) {
         })}
       </div>
 
+      {/* Quick emoji reactions */}
+      <div className="flex items-center gap-1 border-t border-zinc-800 px-2 py-1.5">
+        {QUICK_REACTIONS.map((e) => (
+          <button
+            key={e}
+            type="button"
+            onClick={() => quickSend(e)}
+            className="flex h-7 w-7 items-center justify-center rounded-full text-base transition hover:scale-125 hover:bg-zinc-800"
+            title={`Insert ${e}`}
+          >
+            {e}
+          </button>
+        ))}
+      </div>
+
+      {/* Input */}
       <form
         onSubmit={handleSend}
-        className="flex gap-2 border-t border-zinc-800 p-2"
+        className="flex items-center gap-2 border-t border-zinc-800 p-2"
       >
         <input
           type="text"
@@ -145,15 +168,18 @@ export default function ChatPanel({ roomId, user, onClose }) {
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={onKeyDown}
           maxLength={500}
-          placeholder="Message…"
-          className="min-h-[44px] flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-fuchsia-400"
+          placeholder="Say something…"
+          className="min-h-[40px] flex-1 rounded-full border border-zinc-700 bg-zinc-900 px-4 py-2 text-sm outline-none focus:border-fuchsia-400"
         />
         <button
           type="submit"
           disabled={sending || !draft.trim()}
-          className="min-h-[44px] rounded-lg bg-fuchsia-500 px-4 text-sm font-semibold hover:bg-fuchsia-400 disabled:opacity-50"
+          aria-label="Send message"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-fuchsia-500 text-white shadow-lg shadow-fuchsia-500/30 transition hover:bg-fuchsia-400 disabled:opacity-40 disabled:shadow-none"
         >
-          Send
+          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+            <path d="M2 21l21-9L2 3v7l15 2-15 2v7z" />
+          </svg>
         </button>
       </form>
     </aside>

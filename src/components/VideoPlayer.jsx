@@ -52,6 +52,9 @@ export default function VideoPlayer({ room, isHost }) {
   const [history, setHistory] = useState(() => listHistory())
   const [showHistory, setShowHistory] = useState(false)
   const [showSubs, setShowSubs] = useState(false)
+  // Source drawer (tabs + search + URL paste + history). Auto-open when there
+  // is no media yet so the host knows what to do; collapses once a video loads.
+  const [sourceOpen, setSourceOpen] = useState(true)
 
   const media = useMemo(() => parseMediaUrl(mediaUrl), [mediaUrl])
   const yt = useMediaPlayer(containerRef, media)
@@ -223,6 +226,8 @@ export default function VideoPlayer({ room, isHost }) {
     // Re-run enrichment in the background whenever a new entry is added,
     // so its title/thumb get filled in even before the user opens the panel.
     enrichHistory((updated) => setHistory([...updated]))
+    // Auto-collapse the source drawer once a real video is loaded.
+    if (mediaUrl) setSourceOpen(false)
   }, [mediaUrl])
 
   // Track the browser's fullscreen state so the icon stays in sync when
@@ -405,133 +410,36 @@ export default function VideoPlayer({ room, isHost }) {
   )
 
   return (
-    <div>
-      {/* Source tabs (host only — guests see it but can't interact) */}
-      <SourceTabs value={activeTab} onChange={setActiveTab} disabled={!isHost} />
-
-      {/* YouTube in-app search panel */}
-      {activeTab === 'youtube' && isHost && (
-        <div className="mt-3">
-          <YouTubeBrowser onPick={loadUrl} disabled={!isHost} />
-        </div>
-      )}
-
-      {/* History button (host only) */}
-      {isHost && (
-        <div className="relative mt-3">
-          <button
-            type="button"
-            onClick={() => setShowHistory((v) => !v)}
-            className="inline-flex min-h-[32px] items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:border-zinc-600"
-            title="Recently watched (saved on this device)"
-          >
-            🕘 <span>History</span>
-            {history.length > 0 && (
-              <span className="rounded-full bg-fuchsia-500/20 px-1.5 text-[10px] text-fuchsia-300">
-                {history.length}
-              </span>
-            )}
-          </button>
-          {showHistory && (
-            <div className="absolute left-0 right-0 top-full z-40 mt-2 max-h-[28rem] overflow-y-auto rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl">
-              <div className="sticky top-0 z-10 flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-3 py-2">
-                <span className="text-xs font-semibold text-zinc-400">
-                  🕘 History · saved on this device
-                </span>
-                <div className="flex items-center gap-3">
-                  {history.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleHistoryClear}
-                      className="text-xs text-zinc-400 hover:text-red-400"
-                    >
-                      Clear all
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setShowHistory(false)}
-                    className="text-xs text-zinc-400 hover:text-zinc-200"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-              {history.length === 0 ? (
-                <div className="px-3 py-10 text-center text-xs text-zinc-500">
-                  Nothing here yet — load a video and it'll show up.
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2 p-2 sm:grid-cols-3">
-                  {history.map((entry) => (
-                    <HistoryCard
-                      key={entry.url}
-                      entry={entry}
-                      onPick={handleHistoryPick}
-                      onRemove={handleHistoryRemove}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* URL paste (always available; placeholder changes per tab) */}
-      <form
-        onSubmit={handleLoadUrl}
-        className={`mt-3 flex gap-2 ${!isHost ? 'opacity-60' : ''}`}
-      >
-        <input
-          type="text"
-          value={urlInput}
-          onChange={(e) => setUrlInput(e.target.value)}
-          disabled={!isHost}
-          placeholder={
-            isHost
-              ? URL_PLACEHOLDERS[activeTab] || 'Paste a video URL'
-              : 'Only the host can change the video'
-          }
-          className="min-h-[44px] flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-fuchsia-400 disabled:cursor-not-allowed"
-        />
-        <button
-          type="submit"
-          disabled={!isHost}
-          className="min-h-[44px] rounded-lg bg-fuchsia-500 px-4 py-2 text-sm font-semibold hover:bg-fuchsia-400 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          Load
-        </button>
-      </form>
-      {urlErr && <div className="mt-2 text-sm text-red-400">{urlErr}</div>}
-
-      {/* 16:9 player */}
+    <div className="relative flex h-full min-h-0 w-full flex-col">
+      {/* PLAYER AREA — fills available space, dark, cinematic. */}
       <div
         ref={playerWrapRef}
-        className="relative mt-4 w-full overflow-hidden rounded-xl bg-black"
+        className="relative flex min-h-0 flex-1 items-center justify-center bg-black"
       >
+        {/* 16:9 player constrained to the available area */}
         <div
           className="relative"
           style={
             isFullscreen
               ? { width: '100vw', height: '100vh' }
-              : { paddingTop: '56.25%' }
+              : { width: '100%', maxWidth: 'min(100%, calc((100vh - 8rem) * 16 / 9))', aspectRatio: '16 / 9' }
           }
         >
           <div ref={containerRef} className="absolute inset-0" />
-          {/* Subtitle overlay (works for every backend) */}
           <SubtitleOverlay cues={cues} currentTime={yt.currentTime} offset={subOffset} />
+
           {!media && (
-            <div className="absolute inset-0 flex items-center justify-center px-4 text-center text-zinc-500">
-              {isHost
-                ? 'Paste a video URL above to start.'
-                : 'Waiting for the host to load a video…'}
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 px-4 text-center text-zinc-500">
+              <span className="text-4xl">🎬</span>
+              <span>
+                {isHost
+                  ? 'Click "Media URL" on the left to load a video.'
+                  : 'Waiting for the host to load a video…'}
+              </span>
             </div>
           )}
-          {/* Guest click-blocker: absorbs all interaction with the embed
-              so guests can't play/pause/seek locally. The host has full
-              control. (Only when sync is supported — Drive can't be
-              synced, so we let guests use the native iframe controls.) */}
+
+          {/* Guest click-blocker */}
           {!isHost && media && supportsSync && (
             <div
               className="absolute inset-0 z-10 cursor-not-allowed"
@@ -539,41 +447,140 @@ export default function VideoPlayer({ room, isHost }) {
               onClick={(e) => e.preventDefault()}
             />
           )}
-          {/* SYNCED badge */}
+
+          {/* Top-right SYNCED / HOST / LIVE badge */}
           <div
             className={
               'absolute right-3 top-3 z-20 rounded-full px-2.5 py-1 text-xs font-semibold tracking-wider transition ' +
               (flash
                 ? 'bg-green-500 text-black shadow-lg shadow-green-500/40'
-                : 'bg-zinc-800/70 text-zinc-400')
+                : 'bg-black/60 text-zinc-300 backdrop-blur')
             }
           >
             {flash ? 'SYNCED' : isHost ? 'HOST' : 'LIVE'}
           </div>
-          {media && (
-            <div className="absolute left-3 top-3 z-20 rounded-full bg-zinc-800/70 px-2.5 py-1 text-xs font-semibold text-zinc-300">
-              {mediaLabel(media)}
-            </div>
-          )}
-          {/* Controls overlay — only shown when fullscreen. Same component
-              as the inline one below, so behavior stays in sync. */}
+
+          {/* Fullscreen controls overlay */}
           {isFullscreen && controlsBar}
         </div>
+
+        {/* LEFT-EDGE FLOATING ACTION PILLS (host only) — Media URL toggle */}
+        {isHost && !isFullscreen && (
+          <div className="absolute left-3 top-3 z-30 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setSourceOpen((v) => !v)}
+              className={
+                'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold backdrop-blur transition ' +
+                (sourceOpen
+                  ? 'border-fuchsia-500/60 bg-fuchsia-500/20 text-fuchsia-200'
+                  : 'border-zinc-700/60 bg-black/60 text-zinc-200 hover:border-fuchsia-500/40 hover:text-fuchsia-200')
+              }
+              title="Change media source"
+            >
+              <LinkIcon /> <span>Media URL</span>
+            </button>
+          </div>
+        )}
+
+        {/* SOURCE DRAWER — slides down from the top of the player area */}
+        {isHost && sourceOpen && !isFullscreen && (
+          <div className="absolute inset-x-0 top-0 z-40 max-h-full overflow-y-auto border-b border-zinc-800 bg-zinc-950/95 backdrop-blur">
+            <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-3 py-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+                Load a video
+              </span>
+              <button
+                type="button"
+                onClick={() => setSourceOpen(false)}
+                className="rounded-full p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"
+                aria-label="Close"
+                title="Close"
+              >
+                <CloseIcon />
+              </button>
+            </div>
+
+            <div className="space-y-3 p-3">
+              <SourceTabs value={activeTab} onChange={setActiveTab} disabled={!isHost} />
+
+              {activeTab === 'youtube' && (
+                <YouTubeBrowser onPick={loadUrl} disabled={!isHost} />
+              )}
+
+              <form onSubmit={handleLoadUrl} className="flex gap-2">
+                <input
+                  type="text"
+                  value={urlInput}
+                  onChange={(e) => setUrlInput(e.target.value)}
+                  placeholder={URL_PLACEHOLDERS[activeTab] || 'Paste a video URL'}
+                  className="min-h-[40px] flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm outline-none focus:border-fuchsia-400"
+                />
+                <button
+                  type="submit"
+                  className="min-h-[40px] rounded-lg bg-fuchsia-500 px-4 py-2 text-sm font-semibold hover:bg-fuchsia-400"
+                >
+                  Load
+                </button>
+              </form>
+              {urlErr && <div className="text-sm text-red-400">{urlErr}</div>}
+
+              {/* History inline grid */}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowHistory((v) => !v)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-xs font-semibold text-zinc-200 hover:border-zinc-600"
+                >
+                  🕘 <span>History</span>
+                  {history.length > 0 && (
+                    <span className="rounded-full bg-fuchsia-500/20 px-1.5 text-[10px] text-fuchsia-300">
+                      {history.length}
+                    </span>
+                  )}
+                </button>
+                {showHistory && (
+                  <div className="mt-2 max-h-64 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-900/60 p-2">
+                    {history.length === 0 ? (
+                      <div className="px-3 py-6 text-center text-xs text-zinc-500">
+                        Nothing here yet.
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                        {history.map((entry) => (
+                          <HistoryCard
+                            key={entry.url}
+                            entry={entry}
+                            onPick={(e) => { handleHistoryPick(e); setSourceOpen(false) }}
+                            onRemove={handleHistoryRemove}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {media && !supportsSync && (
+                <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                  ⚠️ {mediaLabel(media)} videos can't be synced — each viewer plays
+                  independently.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
-      {media && !supportsSync && (
-        <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          ⚠️ {mediaLabel(media)} videos can't be synced — each viewer plays
-          independently. Use the iframe's own controls.
+
+      {/* Controls bar — overlayed at the bottom of the player when not fullscreen */}
+      {!isFullscreen && (
+        <div className="border-t border-zinc-900 bg-zinc-950 px-3 py-2">
+          {controlsBar}
         </div>
       )}
 
-      {/* Custom controls — inline when not fullscreen. In fullscreen mode
-          the same controlsBar is rendered as an overlay inside the player.
-          Subtitle upload is nested inside the controls bar (CC icon). */}
-      {!isFullscreen && controlsBar}
-
-      {!isHost && (
-        <div className="mt-2 text-xs text-zinc-500">
+      {!isHost && !media && (
+        <div className="px-3 py-2 text-center text-xs text-zinc-500">
           Controls are read-only — only the host can play, pause, and seek.
         </div>
       )}
@@ -643,6 +650,21 @@ function VolumeMutedIcon() {
     </svg>
   )
 }
+function LinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M3.9 12a3.1 3.1 0 013.1-3.1h4v-2H7a5.1 5.1 0 100 10.2h4v-2H7A3.1 3.1 0 013.9 12zm5.1 1h6v-2H9v2zm8-7h-4v2h4a3.1 3.1 0 010 6.2h-4v2h4A5.1 5.1 0 0017 6z" />
+    </svg>
+  )
+}
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+      <path d="M18.3 5.7L12 12l6.3 6.3-1.4 1.4L10.6 13.4 5.7 18.3l-1.4-1.4L10.6 12 5.7 5.7l1.4-1.4L12 10.6l4.9-4.9z" />
+    </svg>
+  )
+}
+
 function CcIcon({ active }) {
   return (
     <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">

@@ -133,62 +133,73 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
   const { viewers, lastEvent } = usePresence(room.id, presenceUser)
   const [chatOpen, setChatOpen] = useState(false)
   const isDesktop = useMediaQuery('(min-width: 1024px)') // tailwind lg
+  const navigate = useNavigate()
 
   return (
-    <div className="min-h-full bg-gradient-to-br from-zinc-950 via-zinc-900 to-black">
-      <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 sm:py-6">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <Link to="/" className="text-sm text-zinc-400 hover:text-zinc-200">
-            ← Back home
+    <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-zinc-950 via-zinc-900 to-black">
+      {/* TOP BAR — slim, dark, theatrical */}
+      <header className="flex items-center justify-between gap-2 border-b border-zinc-800/80 bg-zinc-950/80 px-3 py-2 backdrop-blur sm:px-5 sm:py-2.5">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link to="/" className="flex items-center gap-2 shrink-0">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-500 to-cyan-500 text-sm font-extrabold text-white">P</span>
+            <span className="hidden bg-gradient-to-r from-fuchsia-300 to-cyan-300 bg-clip-text font-bold tracking-tight text-transparent sm:inline">
+              Partygram
+            </span>
           </Link>
-          <div className="flex items-center gap-2">
-            <div className="font-mono text-xs text-zinc-500">
-              code <span className="text-zinc-300">{room.code}</span>
-            </div>
-            <InviteButton code={room.code} />
-            <ExpiryCountdown expiresAt={room.expires_at} />
+          <div className="hidden h-5 w-px bg-zinc-800 sm:block" />
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="text-[10px] uppercase tracking-widest text-zinc-500">Room</span>
+            <span className="truncate font-mono text-xs font-bold text-zinc-100 sm:text-sm">
+              {room.code}
+            </span>
+            {isHost && (
+              <span className="rounded bg-fuchsia-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-fuchsia-300">
+                HOST
+              </span>
+            )}
           </div>
         </div>
 
-        <header className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
-          <div>
-            <h1 className="text-xl font-bold sm:text-2xl">{room.name}</h1>
-            <p className="text-sm text-zinc-400">
-              Hosted by <span className="text-zinc-200">{hostName}</span>
-              {isHost && (
-                <span className="ml-2 rounded bg-fuchsia-500/20 px-1.5 py-0.5 text-xs font-semibold text-fuchsia-300">
-                  YOU
-                </span>
-              )}
-            </p>
-          </div>
-          <div className="flex items-center justify-between gap-3 sm:flex-col sm:items-end">
-            <div className="text-xs text-zinc-500 sm:text-right">
-              joined as <span className="text-zinc-300">{displayName}</span>
-            </div>
-            {/* Mobile-only compact viewer count */}
-            <div className="lg:hidden">
-              <ViewersBar viewers={viewers} hostId={room.host_id} compact />
-            </div>
-          </div>
-        </header>
+        <div className="flex shrink-0 items-center gap-2">
+          <ViewersBar viewers={viewers} hostId={room.host_id} compact />
+          <ExpiryCountdown expiresAt={room.expires_at} />
+          <InviteButton code={room.code} />
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="inline-flex h-8 items-center rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-xs font-semibold text-zinc-300 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-300"
+            title="Leave room"
+          >
+            Leave
+          </button>
+        </div>
+      </header>
 
-        <div className="mt-4 flex flex-col gap-4 sm:mt-6 lg:flex-row">
-          <main className="min-w-0 flex-1">
+      {/* MAIN — video left, chat right. Full-bleed, no scrolling, dark cinema feel. */}
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-black">
+          {/* Room title strip — subtle, above the player */}
+          <div className="flex items-center justify-between gap-2 border-b border-zinc-900 px-3 py-1.5 text-xs text-zinc-500">
+            <div className="truncate">
+              <span className="font-semibold text-zinc-300">{room.name}</span>
+              <span className="ml-2 text-zinc-600">·</span>
+              <span className="ml-2">hosted by <span className="text-zinc-400">{hostName}</span></span>
+            </div>
+            <div className="shrink-0 text-zinc-600">
+              joined as <span className="text-zinc-400">{displayName}</span>
+            </div>
+          </div>
+          <div className="flex min-h-0 flex-1 items-stretch">
             <VideoPlayer room={room} isHost={isHost} />
-          </main>
+          </div>
+        </main>
 
-          {/* Desktop side panel — only mounted on lg+ to avoid double-subscribing
-              to the chat channel. Mobile gets the drawer below instead. */}
-          {isDesktop && (
-            <div className="flex w-[280px] flex-col gap-3 lg:h-[calc(100vh-9rem)]">
-              <ViewersBar viewers={viewers} hostId={room.host_id} />
-              <div className="min-h-[400px] flex-1">
-                <ChatPanel roomId={room.id} user={user} />
-              </div>
-            </div>
-          )}
-        </div>
+        {/* Desktop chat (full height) */}
+        {isDesktop && (
+          <aside className="flex w-[320px] shrink-0 flex-col border-l border-zinc-800 bg-zinc-950">
+            <ChatPanel roomId={room.id} user={user} />
+          </aside>
+        )}
       </div>
 
       {/* Mobile chat FAB (hidden on desktop) */}
