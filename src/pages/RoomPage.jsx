@@ -233,30 +233,33 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-zinc-950 via-zinc-900 to-black">
-      {/* TOP BAR — slim, dark, theatrical */}
-      <header className="flex items-center justify-between gap-2 border-b border-zinc-800/80 bg-zinc-950/80 px-3 py-2 backdrop-blur sm:px-5 sm:py-2.5">
-        <div className="flex min-w-0 items-center gap-3">
-          <Link to="/" className="flex items-center gap-2 shrink-0">
+      {/* TOP BAR — slim, dark, theatrical. Single row, no wrap. */}
+      <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-zinc-800/80 bg-zinc-950/90 px-3 backdrop-blur sm:px-4">
+        <div className="flex min-w-0 items-center gap-2">
+          <Link to="/" className="flex items-center gap-2 shrink-0" title="Home">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-500 to-cyan-500 text-sm font-extrabold text-white">P</span>
             <span className="hidden bg-gradient-to-r from-fuchsia-300 to-cyan-300 bg-clip-text font-bold tracking-tight text-transparent sm:inline">
               Partygram
             </span>
           </Link>
           <div className="hidden h-5 w-px bg-zinc-800 sm:block" />
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="text-[10px] uppercase tracking-widest text-zinc-500">Room</span>
-            <span className="truncate font-mono text-xs font-bold text-zinc-100 sm:text-sm">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate font-mono text-xs font-bold text-zinc-200 sm:text-sm" title={`Room ${room.code}`}>
               {room.code}
             </span>
             {isHost && (
-              <span className="rounded bg-fuchsia-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-fuchsia-300">
+              <span className="rounded bg-fuchsia-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-fuchsia-300">
                 HOST
               </span>
             )}
+            <span className="hidden text-zinc-600 md:inline" aria-hidden>·</span>
+            <span className="hidden truncate text-[11px] text-zinc-500 md:inline">
+              hosted by <span className="text-zinc-300">{hostName}</span>
+            </span>
           </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5">
           <VoteSkipButton
             myVote={control.myVote}
             voteCount={control.voteCount}
@@ -285,15 +288,19 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
             onForceMute={(uid) => voice.forceMutePeer(uid)}
             compact
           />
-          <ExpiryCountdown expiresAt={room.expires_at} />
+          <div className="hidden xl:block">
+            <ExpiryCountdown expiresAt={room.expires_at} />
+          </div>
           <InviteButton code={room.code} />
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="inline-flex h-8 items-center rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-xs font-semibold text-zinc-300 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-300"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-300 sm:w-auto sm:px-3"
             title="Leave room"
+            aria-label="Leave room"
           >
-            Leave
+            <span className="sm:hidden text-base leading-none">×</span>
+            <span className="hidden text-xs font-semibold sm:inline">Leave</span>
           </button>
         </div>
       </header>
@@ -308,17 +315,6 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
       {/* MAIN — video left, chat right. Full-bleed, no scrolling, dark cinema feel. */}
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <main className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-black">
-          {/* Room title strip — subtle, above the player */}
-          <div className="flex items-center justify-between gap-2 border-b border-zinc-900 px-3 py-1.5 text-xs text-zinc-500">
-            <div className="truncate">
-              <span className="font-semibold text-zinc-300">{room.name}</span>
-              <span className="ml-2 text-zinc-600">·</span>
-              <span className="ml-2">hosted by <span className="text-zinc-400">{hostName}</span></span>
-            </div>
-            <div className="shrink-0 text-zinc-600">
-              joined as <span className="text-zinc-400">{displayName}</span>
-            </div>
-          </div>
           <div className="flex min-h-0 flex-1 items-stretch">
             <VideoPlayer room={room} isHost={isHost} />
           </div>

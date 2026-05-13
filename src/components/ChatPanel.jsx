@@ -96,7 +96,7 @@ export default function ChatPanel({ roomId, user, onClose }) {
   return (
     <aside className="flex h-full w-full flex-col bg-zinc-950">
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-zinc-800 px-4 py-3">
+      <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-zinc-800 px-4">
         <div className="flex items-center gap-2">
           <span className="flex h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
           <h3 className="text-sm font-bold tracking-wide text-zinc-100">Chat</h3>
@@ -106,7 +106,7 @@ export default function ChatPanel({ roomId, user, onClose }) {
             type="button"
             onClick={onClose}
             aria-label="Close chat"
-            className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 lg:hidden"
+            className="flex h-8 w-8 items-center justify-center rounded-full text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 lg:hidden"
           >
             <span className="text-xl leading-none">×</span>
           </button>

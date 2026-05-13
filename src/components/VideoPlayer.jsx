@@ -446,7 +446,7 @@ export default function VideoPlayer({ room, isHost }) {
               <span className="text-4xl">🎬</span>
               <span>
                 {isHost
-                  ? 'Click "Media URL" on the left to load a video.'
+                  ? 'Pick a source above to start watching.'
                   : 'Waiting for the host to load a video…'}
               </span>
             </div>
@@ -461,39 +461,29 @@ export default function VideoPlayer({ room, isHost }) {
             />
           )}
 
-          {/* Top-right SYNCED / HOST / LIVE badge */}
-          <div
-            className={
-              'absolute right-3 top-3 z-20 rounded-full px-2.5 py-1 text-xs font-semibold tracking-wider transition ' +
-              (flash
-                ? 'bg-green-500 text-black shadow-lg shadow-green-500/40'
-                : 'bg-black/60 text-zinc-300 backdrop-blur')
-            }
-          >
-            {flash ? 'SYNCED' : isHost ? 'HOST' : 'LIVE'}
-          </div>
+          {/* Top-right SYNC flash — only shows briefly on sync events. */}
+          {flash && (
+            <div className="absolute right-3 top-3 z-20 rounded-full bg-green-500 px-2.5 py-1 text-[10px] font-bold tracking-wider text-black shadow-lg shadow-green-500/40">
+              SYNCED
+            </div>
+          )}
 
           {/* Fullscreen controls overlay */}
           {isFullscreen && controlsBar}
         </div>
 
-        {/* LEFT-EDGE FLOATING ACTION PILLS (host only) — Media URL toggle */}
-        {isHost && !isFullscreen && (
-          <div className="absolute left-3 top-3 z-30 flex flex-col gap-2">
-            <button
-              type="button"
-              onClick={() => setSourceOpen((v) => !v)}
-              className={
-                'inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold backdrop-blur transition ' +
-                (sourceOpen
-                  ? 'border-fuchsia-500/60 bg-fuchsia-500/20 text-fuchsia-200'
-                  : 'border-zinc-700/60 bg-black/60 text-zinc-200 hover:border-fuchsia-500/40 hover:text-fuchsia-200')
-              }
-              title="Change media source"
-            >
-              <LinkIcon /> <span>Media URL</span>
-            </button>
-          </div>
+        {/* Floating change-source button — icon-only, shows only when a video
+            is loaded (otherwise the source drawer is already open). */}
+        {isHost && !isFullscreen && mediaUrl && !sourceOpen && (
+          <button
+            type="button"
+            onClick={() => setSourceOpen(true)}
+            className="absolute left-3 top-3 z-30 inline-flex h-9 w-9 items-center justify-center rounded-full border border-zinc-700/70 bg-black/60 text-zinc-200 backdrop-blur transition hover:border-fuchsia-500/60 hover:text-fuchsia-200"
+            title="Change media source"
+            aria-label="Change media source"
+          >
+            <LinkIcon />
+          </button>
         )}
 
         {/* SOURCE DRAWER — slides down from the top of the player area */}
