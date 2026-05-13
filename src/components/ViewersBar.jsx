@@ -78,7 +78,7 @@ export default function ViewersBar({
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-40 mt-2 w-64 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl">
+        <div className="absolute right-0 top-full z-[60] mt-2 w-64 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl">
           <div className="border-b border-zinc-800 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-zinc-400">
             Participants · {viewers.length}
           </div>

@@ -43,7 +43,7 @@ export default function UserActionsMenu({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full z-50 mt-2 w-48 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl"
+      className="absolute right-0 top-full z-[70] mt-2 w-48 overflow-hidden rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl"
       role="menu"
     >
       <div className="border-b border-zinc-800 px-3 py-2 text-xs">

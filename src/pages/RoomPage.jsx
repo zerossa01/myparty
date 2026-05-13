@@ -234,7 +234,7 @@ function RoomBody({ room, hostName, isHost, user, displayName }) {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-gradient-to-br from-zinc-950 via-zinc-900 to-black">
       {/* TOP BAR — slim, dark, theatrical. Single row, no wrap. */}
-      <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-zinc-800/80 bg-zinc-950/90 px-3 backdrop-blur sm:px-4">
+      <header className="relative z-50 flex h-12 shrink-0 items-center justify-between gap-2 border-b border-zinc-800/80 bg-zinc-950/90 px-3 backdrop-blur sm:px-4">
         <div className="flex min-w-0 items-center gap-2">
           <Link to="/" className="flex items-center gap-2 shrink-0" title="Home">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-fuchsia-500 to-cyan-500 text-sm font-extrabold text-white">P</span>
